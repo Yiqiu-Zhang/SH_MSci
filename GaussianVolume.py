@@ -8,7 +8,7 @@ Created on Fri Nov 13 19:43:22 2020
 import numpy as np
 from collections import deque
 from rdkit import Chem
-from AlignmentInfo import AlignmentInfo
+#from AlignmentInfo import AlignmentInfo
 from AtomGaussian import AtomGaussian, atomIntersection
 from openbabel import openbabel as ob
 
@@ -118,7 +118,8 @@ def Molecule_volume(mol = Chem.rdchem.Mol(),  gv = GaussianVolume()):
         gv.gaussians[atomIndex].volume = (4.0 * np.pi/3.0) * radius_VDW **3 
         #checked, give the same value as (np.pi/gv.gaussians[atomIndex].alpha)**1.5 * gv.gaussians[atomIndex].weight
         gv.gaussians[atomIndex].n = 1 
-           
+          
+    
         '''Update volume and centroid of the Molecule'''
         gv.volume += gv.gaussians[atomIndex].volume
         gv.centroid += gv.gaussians[atomIndex].volume*gv.gaussians[atomIndex].centre
@@ -345,7 +346,7 @@ def Molecule_overlap(gRef = GaussianVolume(), gDb = GaussianVolume()):
                     processQueue.append([it1,j])
                     
     return overlap_volume
-                    
+'''                   
 def getScore(name, Voa, Vra, Vda):
     
     if name == 'tanimoto':
@@ -358,6 +359,7 @@ def getScore(name, Voa, Vra, Vda):
     
     return 0.0
 
+
 def checkVolumes(gRef = GaussianVolume, gDb = GaussianVolume,
                  res = AlignmentInfo()):
     
@@ -369,7 +371,7 @@ def checkVolumes(gRef = GaussianVolume, gDb = GaussianVolume,
         
     return 
 
-
+'''
 
             
         

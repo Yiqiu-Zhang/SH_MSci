@@ -8,14 +8,15 @@ Created on Mon Nov 23 16:12:45 2020
 import numpy as np
 #from openbabel import openbabel
 from rdkit import Chem
-from AlignmentInfo import AlignmentInfo
-from GaussianVolume import GaussianVolume, Molecule_volume, initOrientation, getScore, checkVolumes
-from ShapeAlignment import ShapeAlignment
-from SolutionInfo import SolutionInfo, updateSolutionInfo
+#from AlignmentInfo import AlignmentInfo
+from GaussianVolume import GaussianVolume, Molecule_volume 
+#from GaussianVolume import GaussianVolume, Molecule_volume
+#from ShapeAlignment import ShapeAlignment
+#from SolutionInfo import SolutionInfo, updateSolutionInfo
 
-import moleculeRotation 
+#import moleculeRotation 
 maxIter = 0
-refMol = Chem.MolFromMolFile('ref.mol')
+refMol = Chem.MolFromMolFile('sangetan.mol')
 
 MATRIXMAP = 0
 
