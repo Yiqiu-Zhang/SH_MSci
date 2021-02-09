@@ -49,16 +49,9 @@ def atomIntersection(a = AtomGaussian(),b = AtomGaussian()):
     
     return  c
 
-def asSpherical(xyz):
-    #takes list xyz (single coord)
-    x       = xyz[0]
-    y       = xyz[1]
-    z       = xyz[2]
-    r = np.sqrt(xyz.dot(xyz))
-    #r       =  sqrt(x*x + y*y + z*z)
-    theta   =  np.arccos(z/r)*180/ np.pi #to degrees
-    phi     =  np.arctan2(y,x)*180/ np.pi
-    return r, theta, phi
+def Normalize(alpha,l):
+    n = np.sqrt(2*(2*alpha)**(l + 3/2)/special.gamma(l+ 3/2))
+    return n
 
 def SHoverlap(a = AtomGaussian(), b = AtomGaussian()):
    
@@ -68,38 +61,74 @@ def SHoverlap(a = AtomGaussian(), b = AtomGaussian()):
     m1 = a.m
     m2 = b.m
     
-    l = l2+l1
+
+    
+    # use the selection rule to 
+    lset = []
+    l = range(abs(l1-l2),l1+l2+1)
+    for value in l:
+        if (l1+l2+ value) %2 == 0:
+            lset.append(value)
     m = m2 -m1
-    n = a.n_qm  #!!! n = 1 for now 
     
     R = b.centre - a.centre
-    r,theta, phi = asSpherical(R)
-    r2 = r*r
-    
+    radius2 = R.dot(R)
+    radius = np.sqrt(radius2)
     xi = a.alpha * b.alpha /(a.alpha + b.alpha)
-    lague_x = xi*r2
-    C_A_nl = 2**n * np.math.factorial(n) / (2/(4*xi))**(n+l+3/2)
-    Laguerre = special.assoc_laguerre(lague_x, n, l+1/2)
-    SolidHarmonic = r**l * special.sph_harm(m, n, theta, phi)
-    Psi_xi_R = np.exp(-lague_x)*Laguerre* SolidHarmonic
-    I = float(gaunt(l1,l2,l,m1,m2,m, prec=15))*C_A_nl * Psi_xi_R #!!! ignored the sum over l, for now l is constant
-    S = (-1)**l2 * (2*np.pi)**(3/2)* I
+    I = 0
+    
+    # for one centre overlap integrals
+    if radius == 0:
+        if l1 == l2: 
+            if m1 == m2: 
+                    I = (-1)**l2 * special.gamma(5/2)* (4*xi)**(5/3) /(2*(2*np.pi)**(3/2))
+
+    else:
+    # for two centre overlap integrals
+        
+        theta   =  np.arccos(R[2]/radius)*180/ np.pi #to degrees
+        phi     =  np.arctan2(R[1],R[0])*180/ np.pi    
+    
+        lague_x = xi*radius2
+        
+        
+        for i in range(2):
+            
+            l = lset[i]
+            n = (l1+l2-l)/2
+            
+            C_A_nl = 2**n * np.math.factorial(n) / (2/(4*xi))**(n+l+3/2)
+            Laguerre = special.assoc_laguerre(lague_x, n, l+1/2)
+            SolidHarmonic = radius**l * special.sph_harm(m, n, theta, phi)
+            Psi_xi_R = np.exp(-lague_x)*Laguerre* SolidHarmonic
+            
+            gaunt_value =  gaunt(l2,l1,l,-m2,m1,m, prec=15)
+            
+            I += (-1)**n * (-1.0)**m2 * gaunt_value * C_A_nl * Psi_xi_R 
+    S = (-1.0)**l2 * (2*np.pi)**(3/2)* Normalize(1/4*a.alpha,l1)* Normalize(1/4*b.alpha,l2)*I
     
     return S
 
 # 0.8199044671160419, 1 , 2.5
 #%%
+m1 = -1
+shstore = []
+for x in np.linspace(-5,5,100):
+    testatom1 = AtomGaussian()
+    testatom1.alpha = 0.836674025
+    testatom1.m = m1
+    testatom1.centre = np.array([x,    0.0,    0.0])
+    
+    testatom2 = AtomGaussian()
+    testatom2.alpha = 0.836674025
+    testatom2.m = m1
+    testatom2.centre = np.array([0.0,    0.0000,    0.0000])
+    
+    
+    sh = SHoverlap(testatom1,testatom2)
+    shstore.append(sh)
+    #print([m1,m2])
+    #print(sh)
 
-testatom1 = AtomGaussian()
-testatom1.alpha = 0.836674025
-testatom1.m = -1
-testatom1.centre = np.array([0.0000,    0.7000,    0.0000])
-
-testatom2 = AtomGaussian()
-testatom2.alpha = 0.836674025
-testatom2.m = 1
-testatom2.centre = np.array([1.2124,    0.0000,    0.0000])
-
-
-sh = SHoverlap(testatom1,testatom2)
 gaussian = atomIntersection(testatom1,testatom2)
+print(gaussian.volume)
