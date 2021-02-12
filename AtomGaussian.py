@@ -10,6 +10,9 @@ import scipy as sp
 from sympy import *
 from scipy import special
 
+import matplotlib.pyplot as plt
+
+
 class AtomGaussian(): # give a system which incoulde the initial condition
     
     def __init__(self):
@@ -46,8 +49,9 @@ def atomIntersection(a = AtomGaussian(),b = AtomGaussian()):
     
     # Set the numer of atom of the overlap gaussian
     c.n = a.n + b.n
+    ratio = c.volume/ ((np.pi/a.alpha)**1.5 * a.weight)
     
-    return  c
+    return  ratio
 
 def Normalize(alpha,l):
     n = np.sqrt(2*(2*alpha)**(l + 3/2)/special.gamma(l+ 3/2))
@@ -60,9 +64,7 @@ def SHoverlap(a = AtomGaussian(), b = AtomGaussian()):
     
     m1 = a.m
     m2 = b.m
-    
 
-    
     # use the selection rule to 
     lset = []
     l = range(abs(l1-l2),l1+l2+1)
@@ -99,7 +101,7 @@ def SHoverlap(a = AtomGaussian(), b = AtomGaussian()):
             
             C_A_nl = 2**n * np.math.factorial(n) / (2/(4*xi))**(n+l+3/2)
             Laguerre = special.assoc_laguerre(lague_x, n, l+1/2)
-            SolidHarmonic = radius**l * special.sph_harm(m, n, theta, phi)
+            SolidHarmonic = radius**l * special.sph_harm(m, l, phi, theta)
             Psi_xi_R = np.exp(-lague_x)*Laguerre* SolidHarmonic
             
             gaunt_value =  gaunt(l2,l1,l,-m2,m1,m, prec=15)
@@ -112,23 +114,42 @@ def SHoverlap(a = AtomGaussian(), b = AtomGaussian()):
 # 0.8199044671160419, 1 , 2.5
 #%%
 m1 = -1
-shstore = []
-for x in np.linspace(-5,5,100):
-    testatom1 = AtomGaussian()
-    testatom1.alpha = 0.836674025
-    testatom1.m = m1
-    testatom1.centre = np.array([x,    0.0,    0.0])
+#shstore = []
+shstore_pm = []
+gaussian_volume = []
+shstore_angle = []
+x = np.linspace(0, np.pi,1000)
+#for psi in np.linspace(-np.pi,np.pi,50):
+psi = 0.5 * np.pi
+#for theta in np.linspace(0, np.pi,1000):
+for x in np.linspace(0.1,4,100):
+
+    atomA = AtomGaussian()
+    atomA.alpha = 0.836674025
+    atomA.m = m1
+    atomA.centre = np.array([0.0,   0.0000,   0.0000])
+    #atomA.centre = np.array([0.0000,    0.0000,    0.00000])
     
-    testatom2 = AtomGaussian()
-    testatom2.alpha = 0.836674025
-    testatom2.m = m1
-    testatom2.centre = np.array([0.0,    0.0000,    0.0000])
+    atomB = AtomGaussian()
+    atomB.alpha = 0.836674025
+    atomB.m = m1
+    #atomB.centre = np.array([1.5 * np.sin(psi)*np.sin(theta),  1.5*np.cos(psi)*np.sin(theta),  1.5 * np.cos(theta)])
+    atomB.centre = np.array([0.0,   0.0000,   x])
     
-    
-    sh = SHoverlap(testatom1,testatom2)
-    shstore.append(sh)
+    sh = SHoverlap(atomA,atomB)
+    shstore_pm.append(sh)
     #print([m1,m2])
     #print(sh)
 
-gaussian = atomIntersection(testatom1,testatom2)
-print(gaussian.volume)
+    gaussian = atomIntersection(atomA,atomB)
+    gaussian_volume.append(gaussian)
+
+#%%
+x = np.linspace(0.1,4,100)
+plt.plot(x, np.array(shstore),'x',label='m_a = m_b = 0 pp_sigma')# + shstore_neg)/2
+plt.plot(x, np.array(gaussian_volume),'.',label='gaussian')
+plt.plot(x, np.array(shstore_pm),'*',label='m_a = m_b = 1/-1 pp_pi')
+#plt.plot(np.linspace(0, np.pi,1000), np.array(shstore_angle),label='psi_0.5, m1_2 = +1')
+plt.xlabel("theta")
+plt.ylabel("overlap integral")
+plt.legend()
