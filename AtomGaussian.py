@@ -90,6 +90,11 @@ def SHoverlap(a = AtomGaussian(), b = AtomGaussian()):
         
         theta   =  np.arccos(R[2]/radius)#0# #to degrees
         phi     =  np.arctan2(R[1],R[0])#2*np.pi#    
+        if theta < 0:
+            theta = theta + 2*np.pi
+        if phi < 0:
+            phi = phi + 2*np.pi
+
     
         lague_x = xi*radius2
         
@@ -101,8 +106,9 @@ def SHoverlap(a = AtomGaussian(), b = AtomGaussian()):
             C_A_nl = 2**n * np.math.factorial(n) * (2*xi)**(n+l+3/2)
             Laguerre = special.assoc_laguerre(lague_x, n, l+1/2)
             SolidHarmonic = radius**l * special.sph_harm(m, l, phi, theta)
-            Psi_xi_R = np.exp(-lague_x)*Laguerre* SolidHarmonic    
-            gaunt_value = (-1.0)**m2 *  gaunt(l2,l1,l,-m2,m1,m)
+            Psi_xi_R = np.exp(-lague_x)*Laguerre* SolidHarmonic   
+            gaunt_value =   gaunt(l2,l1,l,m2,m1,m)
+            #gaunt_value = (-1.0)**m2 *  gaunt(l2,l1,l,-m2,m1,m)
             
             I += (-1)**n * gaunt_value * C_A_nl * Psi_xi_R 
             
@@ -110,18 +116,16 @@ def SHoverlap(a = AtomGaussian(), b = AtomGaussian()):
     
     return S
 
-# 0.8199044671160419, 1 , 2.5
 #%%
+m1 = -1
+import seaborn as sns
+shmap =[]
 
-
-gaussian_volume = []
-#for psi in np.linspace(-np.pi,np.pi,50):
-psi = 0.5 * np.pi
-#for theta in np.linspace(0, np.pi,1000):
-for m1 in [-1,0,1]:
-    shstore_pm = []
-    for x in np.linspace(-4,4,100):
     
+for phi in np.linspace(0,2*np.pi,100):
+    shstore_angle = []  
+    for theta in np.linspace(0, np.pi,100):
+      
         atomA = AtomGaussian()
         atomA.alpha = 0.836674025
         atomA.m = m1
@@ -132,20 +136,57 @@ for m1 in [-1,0,1]:
         atomB.alpha = 0.836674025
         atomB.m = m1
         atomB.l = 1
-        atomB.centre = np.array([    x, 0.0 ,0.0000])
+        atomB.centre = np.array([1.5 * np.cos(phi)*np.sin(theta),  1.5*np.sin(phi)*np.sin(theta),  1.5 * np.cos(theta)])
         
         sh = SHoverlap(atomA,atomB)
-        shstore_pm.append(sh)
+        shstore_angle.append(float(sh))
+        #angle =  np.arctan2(atomB.centre[1],atomB.centre[0])
+    #print(angle)
+    shmap.append(shstore_angle)
+
+np.array(shmap)
+
+ax = sns.heatmap(shmap)
+
+    #gaussian = atomIntersection(atomA,atomB)
+#plt.plot(np.linspace(0, np.pi,10), np.array(shstore_angle),label='psi_0.5, m1_2 = +1')
+#plt.plot(np.linspace(0, np.pi,1000), np.array(gaussian_volume),'.',label='gaussian')
+plt.xlabel("theta")
+plt.ylabel("psi")
+plt.legend()
+#%%
+gaussian_volume = []
+#for psi in np.linspace(-np.pi,np.pi,50):
+psi = 0.5 * np.pi
+#for theta in np.linspace(0, np.pi,1000):
+#for m1 in [-1,0,1]:
+shstore_pm = []
+for x in np.linspace(-4,4,100):
+
+    atomA = AtomGaussian()
+    atomA.alpha = 0.836674025
+    atomA.m = -1
+    atomA.l = 1
+    atomA.centre = np.array([0.0,   0.0000,   0.0000])
     
+    atomB = AtomGaussian()
+    atomB.alpha = 0.836674025
+    atomB.m = -1
+    atomB.l = 1
+    atomB.centre = np.array([ x, 0.00 ,0.0000])
     
-        gaussian = atomIntersection(atomA,atomB)
-        gaussian_volume.append(gaussian)
-    x = np.linspace(-4,4,100)
-    plt.figure()
-    plt.plot(x, np.array(shstore_pm),'.',label=m1)
-    plt.show()
-    
-    plt.legend()
+    sh = SHoverlap(atomA,atomB)
+    shstore_pm.append(abs(sh))
+
+
+    gaussian = atomIntersection(atomA,atomB)
+    gaussian_volume.append(gaussian)
+x = np.linspace(-4,4,100)
+plt.figure()
+plt.plot(x, np.array(shstore_pm),'.',label=m1)
+plt.show()
+
+plt.legend()
 
 #%%
 m1 = 0
@@ -174,37 +215,6 @@ for x in np.linspace(0,4,100):
     
 x = np.linspace(0,4,100)
 plt.plot(x, np.array(shstore),'x',label='m_a = m_b = 0 pp_sigma')# + shstore_neg)/2
-#%%
-m1 = -1
-import seaborn as sns
-shmap =[]
-for psi in np.linspace(-np.pi,np.pi,50):
-    shstore_angle = []
-    for theta in np.linspace(0, np.pi,10):
-        
-        atomA = AtomGaussian()
-        atomA.alpha = 0.836674025
-        atomA.m = m1
-        atomA.l = 1
-        atomA.centre = np.array([0.0,   0.0000,   0.0000])
-        
-        atomB = AtomGaussian()
-        atomB.alpha = 0.836674025
-        atomB.m = m1
-        atomB.l = 1
-        atomB.centre = np.array([1.5 * np.sin(psi)*np.sin(theta),  1.5*np.cos(psi)*np.sin(theta),  1.5 * np.cos(theta)])
-        
-        sh = SHoverlap(atomA,atomB)
-        shstore_angle.append(sh)
-    shmap.append(shstore_angle)
-ax = sns.heatmap(shmap)
-
-    #gaussian = atomIntersection(atomA,atomB)
-#plt.plot(np.linspace(0, np.pi,10), np.array(shstore_angle),label='psi_0.5, m1_2 = +1')
-#plt.plot(np.linspace(0, np.pi,1000), np.array(gaussian_volume),'.',label='gaussian')
-plt.xlabel("theta")
-plt.ylabel("overlap integral")
-plt.legend()
 #%%
 x = np.linspace(0,4,100)
 plt.plot(x, np.array(gaussian_volume),'.',label='gaussian')
