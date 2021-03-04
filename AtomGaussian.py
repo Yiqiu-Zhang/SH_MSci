@@ -9,6 +9,7 @@ from sympy.physics.wigner import gaunt
 import scipy as sp
 from sympy import *
 from scipy import special
+from sympy.physics.wigner import clebsch_gordan
 
 import matplotlib.pyplot as plt
 
@@ -46,9 +47,7 @@ def atomIntersection(a = AtomGaussian(),b = AtomGaussian()):
     
     c.volume = c.weight * (np.pi/c.alpha) ** 1.5
     #if a.n and b.n ==1:
-        
-    #   
-    
+         
     # Set the numer of atom of the overlap gaussian
     c.n = a.n + b.n
     ratio = c.volume/ ((np.pi/a.alpha)**1.5 * a.weight)
@@ -77,13 +76,7 @@ def SHoverlap(a = AtomGaussian(), b = AtomGaussian()):
     #m1 = a.m
     #m2 = b.m
 
-    # use the selection rule to 
-    lset = []
-    l = range(abs(l1-l2),l1+l2+1)
-    for value in l:
-        if (l1+l2+ value) %2 == 0:
-            lset.append(value)
-    
+
      
     I = 0
     
@@ -92,9 +85,11 @@ def SHoverlap(a = AtomGaussian(), b = AtomGaussian()):
         for m2 in m2set:
             
             m2 = m2.item()
+            #if m1==0 or m2 ==0: continue
+            if m1 != m2: continue # When sum the P orbital, overlap with 
+                                  # different orbital cancled, need this condition
             m = m2 - m1
 
-            
             # for one centre overlap integrals
             if radius == 0:
                 if l1 == l2 and  m1 == m2: 
@@ -110,94 +105,124 @@ def SHoverlap(a = AtomGaussian(), b = AtomGaussian()):
                     theta = theta + 2*np.pi
                 if phi < 0:
                     phi = phi + 2*np.pi
-            
-                
+                    
+                    # use the selection rule to 
+                lset = []
+                for value in range(abs(l1-l2),l1+l2+1):
+                    if (l1+l2+ value) %2 == 0:
+                        lset.append(value)
+ 
                 # Sum I for each L
                 for l in lset:    
                     if abs(m) > l: continue
-                    
-                    n = (l1+l2-l)/2
-                    
-                    C_A_nl = 2**n * np.math.factorial(n) * (2*xi)**(n+l+3/2)
-                    Laguerre = special.assoc_laguerre(lague_x, n, l+1/2)
+                
+                    n             = (l1+l2-l)/2
+                    C_A_nl        = 2**n * np.math.factorial(n) * (2*xi)**(n+l+3/2)
+                    Laguerre      = special.assoc_laguerre(lague_x, n, l+1/2)
                     SolidHarmonic = radius**l * special.sph_harm(m, l, phi, theta)
-                    Psi_xi_R = np.exp(-lague_x)*Laguerre* SolidHarmonic   
-                    gaunt_value = float((-1.0)**m2 *  gaunt(l2,l1,l,-m2,m1,m))
+                    Psi_xi_R      = np.exp(-lague_x)*Laguerre* SolidHarmonic   
+                    gaunt_value   = float((-1.0)**m2 *  gaunt(l2,l1,l,-m2,m1,m))
                     
                     I += (-1)**n * gaunt_value * C_A_nl * Psi_xi_R
-                    #print(I)
-            
-    S = (-1.0)**l2 * (2*np.pi)**(3/2)* Normalize(1/(4*a.alpha),l1)* Normalize(1/(4*b.alpha),l2)*I
+                    ''' for use of sp overlap
+                    
+                    if m2 ==-1:
+                        z = complex(1,-1)*np.sqrt(1/2)
+                        I += z*(-1)**n * gaunt_value * C_A_nl * Psi_xi_R   
+                    if m2 == 1:
+                        z = complex(1,1)*np.sqrt(1/2)
+                        I -= z*(-1)**n * gaunt_value * C_A_nl * Psi_xi_R 
+                        
+                    if m2 == 0:
+                        I += (-1)**n * gaunt_value * C_A_nl * Psi_xi_R
+                     '''  
+    # Normalized version               
+    #S = (-1.0)**l2 * (2*np.pi)**(3/2)* Normalize(1/(4*a.alpha),l1)* Normalize(1/(4*b.alpha),l2)*I
     
-    return S
+    S = (-1.0)**l2 * (2*np.pi)**(3/2)* I
 
+    return S
+def Gradient(n, l, m, alpha, r_vec):
+    '''The function takes input n, l, m from the resulted overlap function
+        AKA Phi^b_nlm'''
+    #transform to spherical polar coordinate
+    r = np.sqrt(r_vec.dot(r_vec))
+    theta   =  np.arccos(r_vec[2]/r)
+    phi     =  np.arctan2(r_vec[1],r_vec[0])
+    
+    if theta < 0:
+        theta = theta + 2*np.pi
+    if phi < 0:
+        phi = phi + 2*np.pi
+    
+    #calculate functions that only related to the radius
+    f = r**l * special.assoc_laguerre(alpha*r**2, n, l+1/2)
+    df = l* r**(l-1) * special.assoc_laguerre(alpha*r**2, n, l+1/2)\
+        - 2*alpha*r**(l+1)*special.assoc_laguerre(alpha*r**2, n-1, l+3/2)
+    
+    #This part is same for all direction, so evalute outside the loop
+    F_plus = np.sqrt((l+1)/(2*l+3)) * (df - l*f/r)
+    F_minus = np.sqrt(l/(2*l-1)) * (df + (l+1)*f/r)
+    #F_plus = (df - l*f/r)/ np.sqrt(2*(2*l+3)*(2*l+1))
+    #F_minus = (df - (l+1)*f/r) /  np.sqrt(2*(2*l+1)*(2*l-1))
+            
+    #Define the transformation matrix from spherical basis to cartizian basis
+    U = np.zeros([3,3]).astype(complex)   
+    U[0,0] = -1/np.sqrt(2)
+    U[0,1] = 1/np.sqrt(2)
+    U[1,0] = U[1,1] = complex(0,-1/np.sqrt(2))
+    U[2,2] = 1
+    
+    G_spherical = np.zeros(3).astype(complex)
+    it = 0
+    for mu in [+1,-1,0]:  
+        
+        G_plus = clebsch_gordan(l,1,l+1,m,mu,m+mu)\
+            * np.nan_to_num(special.sph_harm(m+mu,l+1, phi, theta)) * F_plus
+            
+        G_minus = clebsch_gordan(l,1,l-1,m,mu,m+mu)\
+            * np.nan_to_num(special.sph_harm(m+mu,l-1, phi, theta)) * F_minus
+            
+        G_spherical[it] = G_plus - G_minus
+                        
+        it+=1
+    G= np.matmul(U,G_spherical)
+    return G
+
+def test_F(n, l, m, alpha, r_vec):
+    
+    r = np.sqrt(r_vec.dot(r_vec))
+    theta   =  np.arccos(r_vec[2]/r)
+    phi     =  np.arctan2(r_vec[1],r_vec[0])
+    if theta < 0:
+        theta = theta + 2*np.pi
+    if phi < 0:
+        phi = phi + 2*np.pi
+    
+    f = r**l * special.assoc_laguerre(alpha*r**2, n, l+1/2)
+    Y = np.nan_to_num(special.sph_harm(m,l, phi, theta))
+    
+    return f*Y
+    
+        
 #%%
-'''
-def SHoverlap(a = AtomGaussian(), b = AtomGaussian()):
-   
-    l1 = a.l
-    l2 = b.l
-    
-    m1 = a.m
-    m2 = b.m
-
-    # use the selection rule to 
-    lset = []
-    l = range(abs(l1-l2),l1+l2+1)
-    for value in l:
-        if (l1+l2+ value) %2 == 0:
-            lset.append(value)
-    m = m2 - m1
-    
-    R = b.centre - a.centre
-    radius2 = R.dot(R)
-    radius = np.sqrt(radius2)
-    xi = a.alpha * b.alpha /(a.alpha + b.alpha)
-    I = 0
-    
-    # for one centre overlap integrals
-    if radius == 0:
-        if l1 == l2: 
-            if m1 == m2: 
-                    I = (-1)**l2 * special.gamma(l2+3/2)* (4*xi)**(l2+3/2) /(2*(2*np.pi)**(3/2))
-
-    else:
-    # for two centre overlap integrals
-        
-        theta   =  np.arccos(R[2]/radius)#0# #to degrees
-        phi     =  np.arctan2(R[1],R[0])#2*np.pi#    
-        if theta < 0:
-            theta = theta + 2*np.pi
-        if phi < 0:
-            phi = phi + 2*np.pi
-
-    
-        lague_x = xi*radius2
-        
-        for l in lset:           
-            
-            n = (l1+l2-l)/2
-            
-            C_A_nl = 2**n * np.math.factorial(n) * (2*xi)**(n+l+3/2)
-            Laguerre = special.assoc_laguerre(lague_x, n, l+1/2)
-            SolidHarmonic = radius**l * special.sph_harm(m, l, phi, theta)
-            Psi_xi_R = np.exp(-lague_x)*Laguerre* SolidHarmonic   
-            gaunt_value = float((-1.0)**m2 *  gaunt(l2,l1,l,-m2,m1,m))
-            
-            I += (-1)**n * gaunt_value * C_A_nl * Psi_xi_R 
-            
-    S = (-1.0)**l2 * (2*np.pi)**(3/2)* Normalize(1/(4*a.alpha),l1)* Normalize(1/(4*b.alpha),l2)*I
-    
-    return S
-'''
+R = np.array([0.1,0.5,0.8])
+G = Gradient(1,1,0,0.782,R)
+#%%
+eps = 0.001
+d = np.array([0,1,0])
+test_G = (test_F(1,1,0,0.782,R + eps*d) - test_F(1,1,0,0.782,R - eps*d))/(2*eps)
 
 #%%
 import seaborn as sns
 
 ''' 
-for phi in np.linspace(0,2*np.pi,100):
-    shstore_angle = []  
-    for theta in np.linspace(0, np.pi,100):
+
+
+for phi in np.linspace(0,2*np.pi,50):
+    shstore_angle =np.empty(0)
+
+    for theta in np.linspace(0, np.pi,50):
      ''' 
    
 shmap_inside =np.zeros(50)
@@ -205,18 +230,19 @@ count = 0
 for z in np.linspace(-3,3,50):
     shstore_angle =np.empty(0)
     
-    for x in np.linspace(-3,3,50):
-                  
+    for x in np.linspace(-3,3,50): 
+    
+        #x =     x**0.5       
         atomA = AtomGaussian()
         atomA.alpha = 0.836674050
         #atomA.m = 0
-        atomA.l = 3
+        atomA.l = 0
         atomA.centre = np.array([0.0,   0.0000,   0.0000])
         
         atomB = AtomGaussian()
         atomB.alpha = 0.836674050
         #atomB.m = -1
-        atomB.l = 3
+        atomB.l = 2
         atomB.centre = np.array([x,0,z])
         #atomB.centre = np.array([1.5 * np.cos(phi)*np.sin(theta),  1.5*np.sin(phi)*np.sin(theta),  1.5 * np.cos(theta)])
         
@@ -231,6 +257,8 @@ for z in np.linspace(-3,3,50):
     count += 1
     
 #%%
+import cmath
+x = np.sqrt(shmap_inside.real**2 + shmap_inside.imag**2)
 #shmap += shmap_inside
 ax = sns.heatmap(np.real(shmap_inside),center=0)
 
@@ -309,5 +337,9 @@ plt.xlabel("distance")
 plt.ylabel("overlap integral")
 plt.legend()
 
-
+#%%
+from sympy.physics.wigner import clebsch_gordan
+from sympy.physics.wigner import wigner_3j
+A = clebsch_gordan(1,1,2,1,-1,0)
+print(A)
     
