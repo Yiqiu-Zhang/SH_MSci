@@ -79,14 +79,16 @@ def SHoverlap(a = AtomGaussian(), b = AtomGaussian()):
 
      
     I = 0
+    F = 0
+    K = 0
     
     for m1 in m1set:
         m1 = m1.item()
         for m2 in m2set:
             
             m2 = m2.item()
-            #if m1==0 or m2 ==0: continue
-            if m1 != m2: continue # When sum the P orbital, overlap with 
+            if m1!=0 or m2 !=0: continue
+            #if m1 != m2: continue # When sum the P orbital, overlap with 
                                   # different orbital cancled, need this condition
             m = m2 - m1
 
@@ -116,6 +118,7 @@ def SHoverlap(a = AtomGaussian(), b = AtomGaussian()):
                 for l in lset:    
                     if abs(m) > l: continue
                 
+                    # Calculate the overlap
                     n             = (l1+l2-l)/2
                     C_A_nl        = 2**n * np.math.factorial(n) * (2*xi)**(n+l+3/2)
                     Laguerre      = special.assoc_laguerre(lague_x, n, l+1/2)
@@ -123,7 +126,21 @@ def SHoverlap(a = AtomGaussian(), b = AtomGaussian()):
                     Psi_xi_R      = np.exp(-lague_x)*Laguerre* SolidHarmonic   
                     gaunt_value   = float((-1.0)**m2 *  gaunt(l2,l1,l,-m2,m1,m))
                     
-                    I += (-1)**n * gaunt_value * C_A_nl * Psi_xi_R
+                    I             += (-1)**n * gaunt_value * C_A_nl * Psi_xi_R
+                    
+                    #calculate the gradient 
+                    overGrad      = Gradient(n,l,m,xi,R)
+                    
+                    F             += (-1)**n * gaunt_value * C_A_nl * overGrad
+                    
+                    #calculate the Hessian
+                    C_A_l_np      = 2**(n+1) * np.math.factorial(n+1) * (2*xi)**(n+1+l+3/2)
+                    Laguerre_np   = special.assoc_laguerre(lague_x, n+1, l+1/2)
+                    Psi_xi_R_np   = np.exp(-lague_x)*Laguerre_np* SolidHarmonic
+                    
+                    K             += (-1)**n * gaunt_value * C_A_l_np * Psi_xi_R_np
+                    
+                    
                     ''' for use of sp overlap
                     
                     if m2 ==-1:
@@ -140,13 +157,17 @@ def SHoverlap(a = AtomGaussian(), b = AtomGaussian()):
     #S = (-1.0)**l2 * (2*np.pi)**(3/2)* Normalize(1/(4*a.alpha),l1)* Normalize(1/(4*b.alpha),l2)*I
     
     S = (-1.0)**l2 * (2*np.pi)**(3/2)* I
+    Grad_S = (-1.0)**l2 * (2*np.pi)**(3/2)* F
+    Hess_S = (-1.0)**l2 * (2*np.pi)**(3/2)* K
 
     return S
+
 def Gradient(n, l, m, alpha, r_vec):
     '''The function takes input n, l, m from the resulted overlap function
         AKA Phi^b_nlm'''
     #transform to spherical polar coordinate
-    r = np.sqrt(r_vec.dot(r_vec))
+    r2 = r_vec.dot(r_vec)
+    r = np.sqrt(r2)
     theta   =  np.arccos(r_vec[2]/r)
     phi     =  np.arctan2(r_vec[1],r_vec[0])
     
@@ -156,21 +177,23 @@ def Gradient(n, l, m, alpha, r_vec):
         phi = phi + 2*np.pi
     
     #calculate functions that only related to the radius
-    f = r**l * special.assoc_laguerre(alpha*r**2, n, l+1/2)
-    df = l* r**(l-1) * special.assoc_laguerre(alpha*r**2, n, l+1/2)\
-        - 2*alpha*r**(l+1)*special.assoc_laguerre(alpha*r**2, n-1, l+3/2)
+    exp = np.exp(-alpha*r2)
+    f = r**l *exp* special.assoc_laguerre(alpha*r2, n, l+1/2)
+    df = (l/r - 2*alpha*r) * f \
+        - 2*alpha* exp *r**(l+1) * special.assoc_laguerre(alpha*r2, n-1, l+3/2)
+    #df = l* r**(l-1) * special.assoc_laguerre(alpha*r**2, n, l+1/2)\
+        #- 2*alpha*r**(l+1)*special.assoc_laguerre(alpha*r**2, n-1, l+3/2)
     
     #This part is same for all direction, so evalute outside the loop
     F_plus = np.sqrt((l+1)/(2*l+3)) * (df - l*f/r)
     F_minus = np.sqrt(l/(2*l-1)) * (df + (l+1)*f/r)
-    #F_plus = (df - l*f/r)/ np.sqrt(2*(2*l+3)*(2*l+1))
-    #F_minus = (df - (l+1)*f/r) /  np.sqrt(2*(2*l+1)*(2*l-1))
             
     #Define the transformation matrix from spherical basis to cartizian basis
     U = np.zeros([3,3]).astype(complex)   
     U[0,0] = -1/np.sqrt(2)
     U[0,1] = 1/np.sqrt(2)
-    U[1,0] = U[1,1] = complex(0,-1/np.sqrt(2))
+    U[1,0] = U[1,1] = complex(0,1/np.sqrt(2)) #!!!The sign should be minus
+                                            #But plus give the right answer?
     U[2,2] = 1
     
     G_spherical = np.zeros(3).astype(complex)
@@ -191,15 +214,15 @@ def Gradient(n, l, m, alpha, r_vec):
 
 def test_F(n, l, m, alpha, r_vec):
     
-    r = np.sqrt(r_vec.dot(r_vec))
+    r2 = r_vec.dot(r_vec)
+    r = np.sqrt(r2)
     theta   =  np.arccos(r_vec[2]/r)
     phi     =  np.arctan2(r_vec[1],r_vec[0])
     if theta < 0:
         theta = theta + 2*np.pi
     if phi < 0:
         phi = phi + 2*np.pi
-    
-    f = r**l * special.assoc_laguerre(alpha*r**2, n, l+1/2)
+    f = r**l *np.exp(-alpha*r2)* special.assoc_laguerre(alpha*r2, n, l+1/2)
     Y = np.nan_to_num(special.sph_harm(m,l, phi, theta))
     
     return f*Y
@@ -212,6 +235,35 @@ G = Gradient(1,1,0,0.782,R)
 eps = 0.001
 d = np.array([0,1,0])
 test_G = (test_F(1,1,0,0.782,R + eps*d) - test_F(1,1,0,0.782,R - eps*d))/(2*eps)
+#%%
+atomA = AtomGaussian()
+atomA.alpha = 0.836674050
+#atomA.m = 0
+atomA.l = 0
+atomA.centre = np.array([0.0,   0.0000,   0.0000])
+
+atomB = AtomGaussian()
+atomB.alpha = 0.836674050
+#atomB.m = -1
+atomB.l = 2
+atomB.centre = R
+Grad = SHoverlap(atomA,atomB)
+#%%
+R = np.array([0.1,0.5,0.8])
+eps = 0.00001
+d = np.array([0,1,0])
+
+atomD = AtomGaussian()
+atomD.alpha = 0.836674050
+atomD.l = 2
+atomD.centre = R + eps*d
+
+atomC = AtomGaussian()
+atomC.alpha = 0.836674050
+atomC.l = 2
+atomC.centre = R - eps*d
+
+test_G = (SHoverlap(atomA,atomD) - SHoverlap(atomA,atomC))/(2*eps)
 
 #%%
 import seaborn as sns
