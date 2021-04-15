@@ -8,15 +8,16 @@ Created on Mon Nov 23 16:12:45 2020
 import numpy as np
 #from openbabel import openbabel
 from rdkit import Chem
-#from AlignmentInfo import AlignmentInfo
-from GaussianVolume import GaussianVolume, Molecule_volume 
-#from GaussianVolume import GaussianVolume, Molecule_volume
-#from ShapeAlignment import ShapeAlignment
-#from SolutionInfo import SolutionInfo, updateSolutionInfo
+from rdkit.Geometry import Point3D
+from AlignmentInfo import AlignmentInfo
+from GaussianVolume import GaussianVolume, Molecule_volume, initOrientation,\
+    checkVolumes, getScore
 
-#import moleculeRotation 
+from ShapeAlignment import ShapeAlignment
+from SolutionInfo import SolutionInfo, updateSolutionInfo
+import moleculeRotation 
 maxIter = 0
-refMol = Chem.MolFromMolFile('sangetan.mol')
+refMol = Chem.MolFromMolFile('benzene.mol')
 
 MATRIXMAP = 0
 
@@ -32,11 +33,22 @@ MATRIXMAP = 0
 refVolume = GaussianVolume()
 
 # List all Gaussians and their respective intersections
-Molecule_volume(refMol,refVolume)
+A = Molecule_volume(refMol,refVolume)
 
 # 	Move the Gaussian towards its center of geometry and align with principal axes
-#initOrientation(refVolume)
-
+initOrientation(refVolume)
+dbMol = Chem.MolFromMolFile('sibianxing.mol')
+dbVolume = GaussianVolume()
+B = Molecule_volume(dbMol,dbVolume)
+initOrientation(dbVolume)
+#%%
+aligner = ShapeAlignment(refVolume,dbVolume)
+nextRes = aligner.gradientAscent_rot()
+ss = getScore('tanimoto', nextRes.overlap, refVolume.overlap, dbVolume.overlap)
+conf = dbMol.GetConformer()
+for i in range(dbMol.GetNumAtoms()):
+     x,y,z = dbVolume.gaussians[i].centre
+     conf.SetAtomPosition(i,Point3D(x,y,z))
 #%%
 
 # dodge all scoreonly process
@@ -125,7 +137,11 @@ np.savetxt("foo.csv", SolutionTable, delimiter=",")
 #np.savetxt("test2.txt", test2, delimiter=",",fmt='%1.6f')
 
 #%%
-imported_db =  Chem.MolToMolBlock(bestSolution.dbMol,confId=-1)    
+#imported_db =  Chem.MolToMolBlock(bestSolution.dbMol,confId=-1)    
+dbMol = Chem.MolFromMolFile('sibianxing.mol')
+refMol = Chem.MolFromMolFile('benzene.mol')
+
+imported_db =  Chem.MolToMolBlock(dbMol,confId=-1)    
 imported_ref = Chem.MolToMolBlock(refMol,confId=-1) 
 with open(r"C:\Users\THINKPAD\Desktop\Msci project\Msci_project_code\Msci_project\Data\db.mol", "w") as newfile:
        newfile.write(imported_db)

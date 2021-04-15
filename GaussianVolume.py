@@ -4,12 +4,12 @@ Created on Fri Nov 13 19:43:22 2020
 
 @author: THINKPAD
 """
-
 import numpy as np
 from collections import deque
 from rdkit import Chem
-#from AlignmentInfo import AlignmentInfo
+from AlignmentInfo import AlignmentInfo
 from AtomGaussian import AtomGaussian, atomIntersection
+from AtomGaussian import SHoverlap
 from openbabel import openbabel as ob
 
 
@@ -115,7 +115,8 @@ def Molecule_volume(mol = Chem.rdchem.Mol(),  gv = GaussianVolume()):
         radius_VDW =  ob.GetVdwRad(atom.GetAtomicNum())
         '''it looks like the GetRvdw function in rdkit give 1.95 for Carbon, 
         which is the vdw radius for Br in our paper, here I redefined the value'''
-        gv.gaussians[atomIndex].volume = (4.0 * np.pi/3.0) * radius_VDW **3 
+        #gv.gaussians[atomIndex].volume = (4.0 * np.pi/3.0) * radius_VDW **3 
+        gv.gaussians[atomIndex].volume = SHoverlap(gv.gaussians[atomIndex],gv.gaussians[atomIndex])[0]
         #checked, give the same value as (np.pi/gv.gaussians[atomIndex].alpha)**1.5 * gv.gaussians[atomIndex].weight
         gv.gaussians[atomIndex].n = 1 
           
@@ -170,7 +171,6 @@ def Molecule_volume(mol = Chem.rdchem.Mol(),  gv = GaussianVolume()):
             # find elements that overlaps with both gaussians(a1 and a2)
             overlaps[i] = overlaps[a1] & overlaps[a2]
  
-
             if len(overlaps[i]) == 0: continue
             for elements in overlaps[i]:
                 
@@ -283,7 +283,13 @@ def Molecule_overlap(gRef = GaussianVolume(), gDb = GaussianVolume()):
             d_sqr = d.dot(d)
            
             # Compute overlap volume
-            V_ij = gRef.gaussians[i].weight * gDb.gaussians[j].weight * (np.pi/(gRef.gaussians[i].alpha + gDb.gaussians[j].alpha))**1.5 * np.exp(- Cij * (d_sqr )) 
+            '''
+            V_ij = gRef.gaussians[i].weight * gDb.gaussians[j].weight * \
+                (np.pi/(gRef.gaussians[i].alpha + gDb.gaussians[j].alpha))**1.5 \
+                    * np.exp(- Cij * (d_sqr ))
+                    '''
+            V_ij = SHoverlap(gRef.gaussians[i],gDb.gaussians[j])[0]
+            
             if V_ij / (gRef.gaussians[i].volume + gDb.gaussians[j].volume - V_ij) < EPS: continue
                 
             overlap_volume += V_ij
@@ -316,8 +322,9 @@ def Molecule_overlap(gRef = GaussianVolume(), gDb = GaussianVolume()):
         d_sqr = d.dot(d)
         			
         # Compute overlap volume
-        V_ij = gRef.gaussians[i].weight * gDb.gaussians[j].weight * (np.pi/(gRef.gaussians[i].alpha + gDb.gaussians[j].alpha))**1.5 * np.exp(- Cij * (d_sqr )) 
-      
+        #V_ij = gRef.gaussians[i].weight * gDb.gaussians[j].weight * (np.pi/(gRef.gaussians[i].alpha + gDb.gaussians[j].alpha))**1.5 * np.exp(- Cij * (d_sqr )) 
+        V_ij = SHoverlap(gRef.gaussians[i],gDb.gaussians[j])[0]
+        
         if V_ij / (gRef.gaussians[i].volume + gDb.gaussians[j].volume - V_ij) < EPS: continue
                            
         if ((gRef.gaussians[i].n + gDb.gaussians[j].n)%2) == 0: 
@@ -346,7 +353,7 @@ def Molecule_overlap(gRef = GaussianVolume(), gDb = GaussianVolume()):
                     processQueue.append([it1,j])
                     
     return overlap_volume
-'''                   
+                 
 def getScore(name, Voa, Vra, Vda):
     
     if name == 'tanimoto':
@@ -371,7 +378,7 @@ def checkVolumes(gRef = GaussianVolume, gDb = GaussianVolume,
         
     return 
 
-'''
+
 
             
         

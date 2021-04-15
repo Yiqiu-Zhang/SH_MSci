@@ -8,7 +8,7 @@ import numpy as np
 from collections import deque
 
 from AlignmentInfo import AlignmentInfo
-from AtomGaussian import AtomGaussian
+from AtomGaussian import AtomGaussian, SHoverlap
 from GaussianVolume import GaussianVolume
 
 '''    
@@ -56,7 +56,7 @@ class ShapeAlignment(GaussianVolume):
         self._maxSize = self._rGauss * self._dGauss + 1
         self._maxIter = 50
         #self._matrixMap = [[] for i in range(self._maxSize-1)]
-        self._matrixMap = np.nan * np.ndarray([self._maxSize-1,4,4])
+        self._matrixMap = np.nan * np.ndarray([self._maxSize-1,6])
         #self._matrixMap = pd.Series(index = np.arange(self._maxSize-1),dtype = float)
         self._map16 = np.nan* np.empty(self._maxSize-1)
 
@@ -65,6 +65,105 @@ class ShapeAlignment(GaussianVolume):
         self._gDb = None
         # clear the matirxmap
         self._matrixMap = np.nan * np.ndarray([self._maxSize-1,4,4])
+        
+    def gradientAscent_rot(self):
+        
+        EPS = 0.03
+        processQueue = deque()
+                
+        d1 = []
+        d2 = []
+                
+        res = AlignmentInfo()
+        
+        oldVolume = 0.0
+        iterations = 0
+        angular_v = np.zeros(3)
+        
+        while iterations <20:
+            atomOverlap = 0
+            iterations += 1
+            SumForce = np.zeros(6)
+            
+            #overHessian = np.zeros((4,4))
+            
+            #xlambda = 0
+            for i in range(self._dAtoms):
+                    rotation(angular_v,self._gDb.gaussians[i])
+            
+            for i in range(self._rAtoms):
+                for j in range(self._dAtoms):
+                      
+                    Vij,force = SHoverlap(self._gRef.gaussians[i], self._gDb.gaussians[j])
+                                
+                    
+                    if  Vij/(self._gRef.gaussians[i].volume + self._gDb.gaussians[j].volume - Vij ) <EPS: continue
+                        
+                    atomOverlap += Vij
+                    
+                    SumForce -= force #SumForce calculated, gradient minus since
+                           
+                    # loop over child nodes and add to queue
+                    d1 = self._gRef.childOverlaps[i]
+                    d2 = self._gDb.childOverlaps[j]
+                        
+                    if d2 != None:
+                        for it2 in d2:
+                            processQueue.append([i,it2])
+                            
+                    if d1 != None:
+                        for it1 in d1:
+                            processQueue.append([it1,j])
+                       
+            while len(processQueue) != 0: # processQueue is not empty
+                pair = processQueue.popleft()               
+                 
+                i = pair[0]
+                j = pair[1]
+              
+                Vij,force = SHoverlap(self._gRef.gaussians[i], self._gDb.gaussians[j])
+                    
+                if  abs(Vij)/(self._gRef.gaussians[i].volume + self._gDb.gaussians[j].volume - abs(Vij) ) < EPS: continue
+                    
+                atomOverlap += Vij
+                SumForce -= force
+                
+                
+                #loop over child nodes and add to queue
+                d1 = self._gRef.childOverlaps[i]
+                d2 = self._gDb.childOverlaps[j]
+                
+                if d1 != None and self._gRef.gaussians[i].n >self._gDb.gaussians[j].n:
+                    for it1 in d1:
+                        processQueue.append([it1,j])
+                else:     
+                    if d2 != None:
+                        for it2 in d2:
+                            processQueue.append([i,it2])
+                            
+                    if d1 != None and self._gDb.gaussians[j].n - self._gRef.gaussians[i].n <2:
+                        for it1 in d1:        
+                            processQueue.append([it1,j])
+                 
+            
+            #check if the new volume is better than the previously found one
+            #if not quit the loop
+            if iterations > 6 and atomOverlap < oldVolume + 0.0001: break
+          
+            oldVolume = atomOverlap #store latest volume found
+            
+            #no measurable overlap between two volumes
+            if np.isnan(oldVolume) or oldVolume == 0: break #np.isnan(xlambda) or
+            
+            #update solution 
+            if oldVolume > res.overlap:
+                
+                angular_v = SumForce[3:]                
+                res.overlap = atomOverlap
+                
+                if  res.overlap/(self._gRef.overlap + self._gDb.overlap - res.overlap)  > 0.99 :break
+                                                    
+        return res
         
     def gradientAscent(self, ro):
         
@@ -434,8 +533,27 @@ class ShapeAlignment(GaussianVolume):
                 scaling_C = - a.weight * b.weight * (np.pi/(a.alpha + b.alpha))**1.5
             return A ,scaling_C                  
                             
-                
-                    
+               
+def rotation(c,a = AtomGaussian()):
+    
+    theta = c.dot(c)
+    cos = np.cos(theta)
+    sin = np.sin(theta)
+    R = np.ndarray([3,3])    
+    R[0,0] = cos + c[0]**2 *(1-cos)
+    R[0,1] = c[0]*c[1]*(1-cos) - c[2]*sin
+    R[0,2] = c[0]*c[2]*(1-cos) + c[1]*sin
+    R[1,0] = c[0]*c[1]*(1-cos) + c[2]*sin
+    R[1,1] = cos + c[1]**2 * (1- cos)
+    R[1,2] = c[1]*c[2]*(1-cos) - c[0]*sin
+    R[2,0] = c[0]*c[2]*(1-cos) - c[1]*sin
+    R[2,1] = c[1]*c[2]*(1-cos) + c[0]*sin 
+    R[2,2] = cos + c[2]**2 * (1 - cos)
+    
+    a.centre = np.matmul(R,a.centre)
+    
+    return
+          
                     
             
             
